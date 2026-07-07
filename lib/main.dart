@@ -140,10 +140,7 @@ class TvhApi {
   Future<List<StreamProfile>> profiles() async {
     final json = await _get('profile/list');
     final list = _entries(json).map(StreamProfile.fromJson).where((e) => e.key.isNotEmpty && e.name.isNotEmpty).toList();
-    list.sort((a, b) {
-      if (a.isDefault != b.isDefault) return a.isDefault ? -1 : 1;
-      return a.name.compareTo(b.name);
-    });
+    list.sort((a, b) => a.name.compareTo(b.name));
     return list;
   }
 
@@ -802,7 +799,7 @@ class _ProfilePageState extends State<ProfilePage> {
               else if (snapshot.hasError) _EmptyPanel(icon: Icons.error_outline_rounded, message: '프로파일을 불러오지 못했습니다.\n${snapshot.error}\n\nTVHeadend 사용자 권한에 스트리밍 권한이 있는지 확인하세요.')
               else if ((snapshot.data ?? const <StreamProfile>[]).isEmpty) const _EmptyPanel(icon: Icons.tune_rounded, message: '서버에서 사용 가능한 스트림 프로파일이 없습니다.')
               else ...snapshot.data!.map((profile) {
-                final selected = widget.settings.profile == profile.uuid;
+                final selected = widget.settings.profile == profile.name;
                 return Padding(
                   padding: const EdgeInsets.only(bottom: 10),
                   child: _TvFocusButton(
@@ -1130,7 +1127,6 @@ class _PlayerPageState extends State<PlayerPage> {
 
   @override
   void dispose() {
-    _controller.dispose();
     _player.dispose();
     super.dispose();
   }
