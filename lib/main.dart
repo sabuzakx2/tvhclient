@@ -1084,13 +1084,67 @@ class ChannelListTile extends StatelessWidget {
           onTap: () => _openPlayer(context, settings, channel, event),
           child: Container(
             height: 86,
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(color: _panel, borderRadius: BorderRadius.circular(14), border: Border.all(color: Colors.white.withValues(alpha: .055))),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+            decoration: BoxDecoration(
+              color: _panel,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: Colors.white.withValues(alpha: .055)),
+            ),
             child: Row(children: [
-              SizedBox(width: 92, child: ClipRRect(borderRadius: BorderRadius.circular(9), child: ChannelVisual(channel: channel))),
+              SizedBox(
+                width: 34,
+                child: Center(
+                  child: Text(
+                    channel.number > 0 ? '${channel.number}' : '-',
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w900,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              SizedBox(
+                width: 74,
+                height: 58,
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(9),
+                  child: ChannelVisual(channel: channel),
+                ),
+              ),
               const SizedBox(width: 13),
-              Expanded(child: Column(mainAxisAlignment: MainAxisAlignment.center, crossAxisAlignment: CrossAxisAlignment.start, children: [Text('${channel.number > 0 ? '${channel.number} · ' : ''}${channel.name}', style: const TextStyle(fontWeight: FontWeight.w800)), const SizedBox(height: 4), Text(event?.title ?? 'EPG 정보 없음', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _muted)), const SizedBox(height: 7), _ProgressBar(value: event?.progress ?? 0, height: 3)])),
-              IconButton(onPressed: onFavorite, icon: Icon(isFavorite ? Icons.star_rounded : Icons.star_border_rounded, color: isFavorite ? Colors.amber : Colors.white), tooltip: '즐겨찾기'),
+              Expanded(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      channel.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontWeight: FontWeight.w800),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      event?.title ?? '현재 방송 정보 없음',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(color: _muted),
+                    ),
+                    const SizedBox(height: 7),
+                    _ProgressBar(value: event?.progress ?? 0, height: 3),
+                  ],
+                ),
+              ),
+              IconButton(
+                onPressed: onFavorite,
+                icon: Icon(
+                  isFavorite ? Icons.star_rounded : Icons.star_border_rounded,
+                  color: isFavorite ? Colors.amber : Colors.white,
+                ),
+                tooltip: '즐겨찾기',
+              ),
             ]),
           ),
         ),
@@ -1197,10 +1251,57 @@ class _PlayerDetails extends StatelessWidget {
           Text(event?.title ?? '현재 방송 정보 없음', style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900)),
           if (event != null) ...[const SizedBox(height: 6), Text('${_time(event!.start)} - ${_time(event!.stop)} · ${_progressText(event!.progress)}', style: const TextStyle(color: _muted)), const SizedBox(height: 12), _ProgressBar(value: event!.progress, height: 5)],
           const SizedBox(height: 24),
-          const Text('오늘의 편성표', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
+          const Text('다음 편성표', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
           const SizedBox(height: 8),
-          if (epg.isEmpty) const Text('EPG를 불러오는 중입니다.', style: TextStyle(color: _muted)),
-          ...epg.map((item) => Container(margin: const EdgeInsets.only(top: 5), padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 9), decoration: BoxDecoration(color: item.isLive ? _accent.withValues(alpha: .75) : Colors.transparent, borderRadius: BorderRadius.circular(8)), child: Row(children: [SizedBox(width: 48, child: Text(_time(item.start), style: const TextStyle(color: Colors.white70, fontFeatures: [FontFeature.tabularFigures()]))), Expanded(child: Text(item.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontWeight: item.isLive ? FontWeight.w800 : FontWeight.w500)))]))),
+          Builder(
+            builder: (context) {
+              final now = DateTime.now();
+              final upcoming = epg
+                  .where((item) => !item.stop.isBefore(now) && !item.stop.isAtSameMomentAs(now))
+                  .where((item) => !item.isLive)
+                  .take(5)
+                  .toList();
+
+              if (epg.isEmpty) {
+                return const Text('EPG 정보를 불러오는 중입니다.', style: TextStyle(color: _muted));
+              }
+
+              if (upcoming.isEmpty) {
+                return const Text('다음 편성 정보가 없습니다.', style: TextStyle(color: _muted));
+              }
+
+              return Column(
+                children: upcoming.map((item) => Container(
+                  margin: const EdgeInsets.only(top: 5),
+                  padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 9),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: .035),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Row(children: [
+                    SizedBox(
+                      width: 48,
+                      child: Text(
+                        _time(item.start),
+                        style: const TextStyle(
+                          color: Colors.white70,
+                          fontFeatures: [FontFeature.tabularFigures()],
+                        ),
+                      ),
+                    ),
+                    Expanded(
+                      child: Text(
+                        item.title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontWeight: FontWeight.w600),
+                      ),
+                    ),
+                  ]),
+                )).toList(),
+              );
+            },
+          ),
         ]),
       );
 }
