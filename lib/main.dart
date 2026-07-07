@@ -137,6 +137,16 @@ class TvhApi {
     return _entries(json).map(TvhChannel.fromJson).where((e) => e.uuid.isNotEmpty && e.name.isNotEmpty).toList();
   }
 
+  Future<List<StreamProfile>> profiles() async {
+    final json = await _get('profile/list');
+    final list = _entries(json).map(StreamProfile.fromJson).where((e) => e.key.isNotEmpty && e.name.isNotEmpty).toList();
+    list.sort((a, b) {
+      if (a.isDefault != b.isDefault) return a.isDefault ? -1 : 1;
+      return a.name.compareTo(b.name);
+    });
+    return list;
+  }
+
   Future<List<EpgEvent>> now() async {
     final json = await _get('epg/events/grid', <String, String>{'limit': '999', 'mode': 'now'});
     return _entries(json).map(EpgEvent.fromJson).where((e) => e.channelUuid.isNotEmpty).toList();
@@ -178,6 +188,17 @@ class TvhTag {
   final String name;
   const TvhTag(this.uuid, this.name);
   factory TvhTag.fromJson(Map<String, dynamic> json) => TvhTag('${json['uuid'] ?? ''}', '${json['name'] ?? ''}');
+}
+
+class StreamProfile {
+  /// TVHeadend profile/list returns { key: UUID, val: profile-name }.
+  final String key;
+  final String name;
+  const StreamProfile({required this.key, required this.name});
+  factory StreamProfile.fromJson(Map<String, dynamic> json) => StreamProfile(
+    key: '${json['key'] ?? ''}',
+    name: '${json['val'] ?? ''}',
+  );
 }
 
 class TvhChannel {
@@ -291,14 +312,14 @@ class _MainShellState extends State<MainShell> {
   @override
   Widget build(BuildContext context) {
     final pages = <Widget>[
-      HomePage(settings: _settings),
-      NowPage(settings: _settings),
       ChannelPage(settings: _settings),
+      NowPage(settings: _settings),
+      ProfilePage(settings: _settings, onSelected: (value) => setState(() => _settings = value)),
       FavoritesPage(settings: _settings),
       SettingsPage(initial: _settings, onSaved: (value) => setState(() => _settings = value)),
     ];
-    final labels = <String>['홈', 'Now', '채널', '즐겨찾기', '설정'];
-    final icons = <IconData>[Icons.home_rounded, Icons.play_circle_outline_rounded, Icons.tv_rounded, Icons.star_rounded, Icons.settings_rounded];
+    final labels = <String>['채널', 'Now', '프로파일', '즐겨찾기', '설정'];
+    final icons = <IconData>[Icons.tv_rounded, Icons.play_circle_outline_rounded, Icons.tune_rounded, Icons.star_rounded, Icons.settings_rounded];
 
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -657,35 +678,152 @@ class _ChannelPageState extends State<ChannelPage> {
     return DataLoader(
       settings: widget.settings,
       builder: (context, data, reload, toggle) {
-        final shown = _selectedTag == null ? data.channels : data.channels.where((e) => e.tags.contains(_selectedTag)).toList();
+        final shown = _selectedTag == null
+            ? data.channels
+            : data.channels.where((e) => e.tags.contains(_selectedTag)).toList();
         return RefreshIndicator(
           color: _accent,
           onRefresh: () async => reload(),
-          child: CustomScrollView(slivers: [
-            const SliverToBoxAdapter(child: Padding(padding: EdgeInsets.fromLTRB(20, 18, 20, 10), child: _SectionHeading(title: '채널', subtitle: '태그별로 원하는 채널을 찾아보세요'))),
-            SliverToBoxAdapter(
-              child: SizedBox(
-                height: 48,
-                child: ListView(scrollDirection: Axis.horizontal, padding: const EdgeInsets.symmetric(horizontal: 20), children: [
-                  TagPill(label: '전체', active: _selectedTag == null, onTap: () => setState(() => _selectedTag = null)),
-                  ...data.tags.map((tag) => TagPill(label: tag.name, active: _selectedTag == tag.uuid, onTap: () => setState(() => _selectedTag = tag.uuid))),
-                ]),
+          child: CustomScrollView(
+            slivers: [
+              const SliverToBoxAdapter(
+                child: Padding(
+                  padding: EdgeInsets.fromLTRB(20, 18, 20, 10),
+                  child: _SectionHeading(title: '채널', subtitle: '현재 방송과 다음 프로그램을 한눈에 확인하세요'),
+                ),
               ),
-            ),
-            SliverPadding(
-              padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
-              sliver: SliverLayoutBuilder(builder: (context, constraints) {
-                final count = constraints.crossAxisExtent >= 1200 ? 7 : constraints.crossAxisExtent >= 900 ? 5 : constraints.crossAxisExtent >= 620 ? 4 : 3;
-                return SliverGrid(
-                  delegate: SliverChildBuilderDelegate((context, index) {
+              SliverToBoxAdapter(
+                child: SizedBox(
+                  height: 48,
+                  child: ListView(
+                    scrollDirection: Axis.horizontal,
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    children: [
+                      TagPill(label: '전체', active: _selectedTag == null, onTap: () => setState(() => _selectedTag = null)),
+                      ...data.tags.map((tag) => TagPill(label: tag.name, active: _selectedTag == tag.uuid, onTap: () => setState(() => _selectedTag = tag.uuid))),
+                    ],
+                  ),
+                ),
+              ),
+              SliverPadding(
+                padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
+                sliver: SliverList.separated(
+                  itemCount: shown.length,
+                  itemBuilder: (context, index) {
                     final channel = shown[index];
-                    return ChannelGridCard(channel: channel, event: data.now[channel.uuid], settings: widget.settings, isFavorite: data.favorites.contains(channel.uuid), onFavorite: () => toggle(channel.uuid));
-                  }, childCount: shown.length),
-                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: count, mainAxisSpacing: 12, crossAxisSpacing: 12, childAspectRatio: .88),
+                    return ChannelListTile(
+                      channel: channel,
+                      event: data.now[channel.uuid],
+                      settings: widget.settings,
+                      isFavorite: data.favorites.contains(channel.uuid),
+                      onFavorite: () => toggle(channel.uuid),
+                    );
+                  },
+                  separatorBuilder: (_, __) => const SizedBox(height: 9),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+class ProfilePage extends StatefulWidget {
+  final AppSettings settings;
+  final ValueChanged<AppSettings> onSelected;
+  const ProfilePage({super.key, required this.settings, required this.onSelected});
+  @override
+  State<ProfilePage> createState() => _ProfilePageState();
+}
+
+class _ProfilePageState extends State<ProfilePage> {
+  late Future<List<StreamProfile>> _future;
+
+  @override
+  void initState() {
+    super.initState();
+    _future = TvhApi(widget.settings).profiles();
+  }
+
+  void _reload() => setState(() => _future = TvhApi(widget.settings).profiles());
+
+  Future<void> _select(StreamProfile profile) async {
+    final next = AppSettings(
+      baseUrl: widget.settings.baseUrl,
+      username: widget.settings.username,
+      password: widget.settings.password,
+      profile: profile.name,
+    );
+    await SettingsStore.save(next);
+    widget.onSelected(next);
+    if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('스트림 프로파일: ${profile.name}')));
+  }
+
+  Future<void> _useDefault() async {
+    final next = AppSettings(
+      baseUrl: widget.settings.baseUrl,
+      username: widget.settings.username,
+      password: widget.settings.password,
+      profile: '',
+    );
+    await SettingsStore.save(next);
+    widget.onSelected(next);
+    if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('TVHeadend 기본 프로파일을 사용합니다.')));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<List<StreamProfile>>(
+      future: _future,
+      builder: (context, snapshot) {
+        return RefreshIndicator(
+          color: _accent,
+          onRefresh: () async => _reload(),
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(20, 18, 20, 28),
+            children: [
+              Row(children: [
+                const Expanded(child: _SectionHeading(title: '스트림 프로파일', subtitle: 'TVHeadend 서버에서 조회한 프로파일입니다')),
+                IconButton(onPressed: _reload, icon: const Icon(Icons.refresh_rounded), tooltip: '새로고침'),
+              ]),
+              const SizedBox(height: 12),
+              _TvFocusButton(
+                onTap: _useDefault,
+                child: Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(color: widget.settings.profile.isEmpty ? _accent.withValues(alpha: .20) : _panel, borderRadius: BorderRadius.circular(14), border: Border.all(color: widget.settings.profile.isEmpty ? _accent : Colors.white.withValues(alpha: .08))),
+                  child: const Row(children: [Icon(Icons.auto_awesome_rounded), SizedBox(width: 12), Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text('TVHeadend 기본값', style: TextStyle(fontWeight: FontWeight.w900)), SizedBox(height: 3), Text('서버에서 기본으로 지정한 스트림 프로파일 사용', style: TextStyle(color: _muted, fontSize: 12))]))]),
+                ),
+              ),
+              const SizedBox(height: 10),
+              if (snapshot.connectionState == ConnectionState.waiting) const Padding(padding: EdgeInsets.all(30), child: Center(child: CircularProgressIndicator(color: _accent)))
+              else if (snapshot.hasError) _EmptyPanel(icon: Icons.error_outline_rounded, message: '프로파일을 불러오지 못했습니다.\n${snapshot.error}\n\nTVHeadend 사용자 권한에 스트리밍 권한이 있는지 확인하세요.')
+              else if ((snapshot.data ?? const <StreamProfile>[]).isEmpty) const _EmptyPanel(icon: Icons.tune_rounded, message: '서버에서 사용 가능한 스트림 프로파일이 없습니다.')
+              else ...snapshot.data!.map((profile) {
+                final selected = widget.settings.profile == profile.uuid;
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: _TvFocusButton(
+                    onTap: () => _select(profile),
+                    child: Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(color: selected ? _accent.withValues(alpha: .20) : _panel, borderRadius: BorderRadius.circular(14), border: Border.all(color: selected ? _accent : Colors.white.withValues(alpha: .08))),
+                      child: Row(children: [
+                        Icon(selected ? Icons.radio_button_checked_rounded : Icons.radio_button_off_rounded, color: selected ? _accent : _muted),
+                        const SizedBox(width: 12),
+                        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                          Row(children: [Expanded(child: Text(profile.name, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16))), ]),
+                                                    Padding(padding: const EdgeInsets.only(top: 5), child: Text('프로파일 ID: ${profile.key}', style: const TextStyle(color: _muted, fontSize: 10))),
+                        ])),
+                      ]),
+                    ),
+                  ),
                 );
               }),
-            ),
-          ]),
+            ],
+          ),
         );
       },
     );
@@ -992,6 +1130,7 @@ class _PlayerPageState extends State<PlayerPage> {
 
   @override
   void dispose() {
+    _controller.dispose();
     _player.dispose();
     super.dispose();
   }
@@ -1072,7 +1211,6 @@ class _SettingsPageState extends State<SettingsPage> {
   late final TextEditingController _url;
   late final TextEditingController _user;
   late final TextEditingController _password;
-  late final TextEditingController _profile;
   bool _saving = false;
   bool _hidden = true;
 
@@ -1082,7 +1220,6 @@ class _SettingsPageState extends State<SettingsPage> {
     _url = TextEditingController(text: widget.initial.baseUrl);
     _user = TextEditingController(text: widget.initial.username);
     _password = TextEditingController(text: widget.initial.password);
-    _profile = TextEditingController(text: widget.initial.profile);
   }
 
   @override
@@ -1090,12 +1227,11 @@ class _SettingsPageState extends State<SettingsPage> {
     _url.dispose();
     _user.dispose();
     _password.dispose();
-    _profile.dispose();
     super.dispose();
   }
 
   Future<void> _save() async {
-    final value = AppSettings(baseUrl: _url.text.trim(), username: _user.text.trim(), password: _password.text, profile: _profile.text.trim());
+    final value = AppSettings(baseUrl: _url.text.trim(), username: _user.text.trim(), password: _password.text, profile: widget.initial.profile);
     if (value.baseUrl.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('TVHeadend 서버 주소를 입력하세요.')));
       return;
@@ -1118,8 +1254,6 @@ class _SettingsPageState extends State<SettingsPage> {
       _SettingsField(label: '사용자명', controller: _user),
       const SizedBox(height: 14),
       _SettingsField(label: '비밀번호', controller: _password, obscure: _hidden, suffix: IconButton(onPressed: () => setState(() => _hidden = !_hidden), icon: Icon(_hidden ? Icons.visibility_rounded : Icons.visibility_off_rounded))),
-      const SizedBox(height: 14),
-      _SettingsField(label: '스트리밍 프로파일', hint: '선택: pass, h264_vaapi_720p 등', controller: _profile),
       const SizedBox(height: 22),
       FilledButton.icon(onPressed: _saving ? null : _save, style: FilledButton.styleFrom(backgroundColor: _accent, minimumSize: const Size.fromHeight(54), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))), icon: _saving ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)) : const Icon(Icons.save_rounded), label: Text(_saving ? '저장 중...' : widget.firstRun ? '저장하고 시작' : '설정 저장', style: const TextStyle(fontWeight: FontWeight.w800))),
     ];
