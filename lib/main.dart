@@ -107,8 +107,19 @@ class TvhApi {
   TvhApi(this.settings);
 
   Map<String, String> get _headers {
-    final basic = base64Encode(utf8.encode('${settings.username}:${settings.password}'));
-    return <String, String>{'Authorization': 'Basic $basic', 'Accept': 'application/json'};
+    final headers = <String, String>{
+      'Accept': 'application/json',
+    };
+
+    final username = settings.username.trim();
+    final password = settings.password;
+
+    if (username.isNotEmpty || password.isNotEmpty) {
+      final basic = base64Encode(utf8.encode('$username:$password'));
+      headers['Authorization'] = 'Basic $basic';
+    }
+
+    return headers;
   }
 
   Uri _uri(String endpoint, [Map<String, String>? params]) {
