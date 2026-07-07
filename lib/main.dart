@@ -164,14 +164,19 @@ class TvhApi {
   }
 
   Future<List<EpgEvent>> epgForChannel(String channelUuid) async {
-    final seconds = DateTime.now().millisecondsSinceEpoch ~/ 1000;
     final json = await _get('epg/events/grid', <String, String>{
-      'limit': '32',
+      'limit': '128',
       'channel': channelUuid,
-      'start': '${seconds - 3600}',
-      'end': '${seconds + 12 * 3600}',
     });
-    return _entries(json).map(EpgEvent.fromJson).toList()..sort((a, b) => a.start.compareTo(b.start));
+
+    final events = _entries(json)
+        .map(EpgEvent.fromJson)
+        .where((event) =>
+            event.channelUuid.isEmpty || event.channelUuid == channelUuid)
+        .toList()
+      ..sort((a, b) => a.start.compareTo(b.start));
+
+    return events;
   }
 
   String streamUrl(TvhChannel channel) {
@@ -1124,28 +1129,41 @@ class ChannelListTile extends StatelessWidget {
             ),
             child: Row(children: [
               SizedBox(
-                width: 34,
-                child: Center(
-                  child: Text(
-                    channel.displayNumber.isNotEmpty ? channel.displayNumber : '-',
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w900,
-                      color: Colors.white,
+                width: 92,
+                height: 66,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    SizedBox(
+                      height: 18,
+                      child: Center(
+                        child: Text(
+                          channel.displayNumber.isNotEmpty
+                              ? channel.displayNumber
+                              : '-',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w900,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ),
                     ),
-                  ),
+                    const SizedBox(height: 3),
+                    SizedBox(
+                      width: 84,
+                      height: 45,
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(7),
+                        child: ChannelVisual(channel: channel),
+                      ),
+                    ),
+                  ],
                 ),
               ),
-              const SizedBox(width: 8),
-              SizedBox(
-                width: 74,
-                height: 58,
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(9),
-                  child: ChannelVisual(channel: channel),
-                ),
-              ),
-              const SizedBox(width: 13),
+              const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
