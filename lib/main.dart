@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:ui' show FontFeature;
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -993,7 +992,6 @@ class _PlayerPageState extends State<PlayerPage> {
 
   @override
   void dispose() {
-    _controller.dispose();
     _player.dispose();
     super.dispose();
   }
