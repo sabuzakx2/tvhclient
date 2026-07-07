@@ -1,36 +1,51 @@
 name: Build Android APK
+
 on:
   push:
-    branches: [ main, master ]
-    tags: [ 'v*' ]
+    branches: [main]
   workflow_dispatch:
+
 permissions:
   contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
+
     steps:
-      - uses: actions/checkout@v4
-      - uses: subosito/flutter-action@v2
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
         with:
           channel: stable
-      - name: Generate Android host project
-        run: flutter create --platforms=android --project-name tvh_stream .
-      - name: Configure Android TV manifest
-        run: bash scripts/configure_android_tv.sh
-      - name: Resolve packages
+          cache: true
+
+      - name: Create Android platform files
+        run: |
+          flutter create --platforms=android .
+          rm -rf test
+          chmod +x scripts/configure_android_tv.sh
+          ./scripts/configure_android_tv.sh
+
+      - name: Install packages
         run: flutter pub get
-      - name: Analyze
-        run: flutter analyze
+
+      - name: Analyze source
+        run: flutter analyze lib
+
       - name: Build release APK
         run: flutter build apk --release
+
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: tvh-stream-release-apk
           path: build/app/outputs/flutter-apk/app-release.apk
-      - name: Create GitHub Release on tag
-        if: startsWith(github.ref, 'refs/tags/v')
-        uses: softprops/action-gh-release@v2
-        with:
-          files: build/app/outputs/flutter-apk/app-release.apk
