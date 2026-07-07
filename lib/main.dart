@@ -153,7 +153,13 @@ class TvhApi {
 
   Future<List<StreamProfile>> profiles() async {
     final json = await _get('profile/list');
-    final list = _entries(json).map(StreamProfile.fromJson).where((e) => e.key.isNotEmpty && e.name.isNotEmpty).toList();
+
+    final list = _entries(json)
+        .map(StreamProfile.fromJson)
+        .where((e) => e.key.isNotEmpty && e.name.isNotEmpty)
+        .where((e) => !e.name.toLowerCase().startsWith('webtv-'))
+        .toList();
+
     list.sort((a, b) => a.name.compareTo(b.name));
     return list;
   }
