@@ -145,7 +145,10 @@ class TvhApi {
 
   Future<List<TvhChannel>> channels() async {
     final json = await _get('channel/grid', <String, String>{'limit': '999', 'sort': 'number', 'dir': 'ASC'});
-    return _entries(json).map(TvhChannel.fromJson).where((e) => e.uuid.isNotEmpty && e.name.isNotEmpty).toList();
+    return _entries(json)
+        .map((entry) => TvhChannel.fromJson(entry, baseUrl: settings.baseUrl))
+        .where((e) => e.uuid.isNotEmpty && e.name.isNotEmpty)
+        .toList();
   }
 
   Future<List<StreamProfile>> profiles() async {
@@ -213,20 +216,49 @@ class TvhChannel {
   final String uuid;
   final String name;
   final int number;
+  final String displayNumber;
   final String icon;
   final Set<String> tags;
 
-  const TvhChannel({required this.uuid, required this.name, required this.number, required this.icon, required this.tags});
+  const TvhChannel({
+    required this.uuid,
+    required this.name,
+    required this.number,
+    required this.displayNumber,
+    required this.icon,
+    required this.tags,
+  });
 
-  factory TvhChannel.fromJson(Map<String, dynamic> json) {
+  factory TvhChannel.fromJson(
+    Map<String, dynamic> json, {
+    String baseUrl = '',
+  }) {
     final rawTags = json['tags'];
     final tags = <String>{};
-    if (rawTags is List) tags.addAll(rawTags.map((e) => '$e'));
+
+    if (rawTags is List) {
+      tags.addAll(rawTags.map((e) => '$e'));
+    }
+
+    final rawNumber = '${json['number'] ?? ''}'.trim();
+    final parsedNumber = double.tryParse(rawNumber)?.floor() ?? 0;
+
+    var rawIcon = '${json['icon_public_url'] ?? json['icon'] ?? ''}'.trim();
+
+    if (rawIcon.isNotEmpty &&
+        !rawIcon.startsWith('http://') &&
+        !rawIcon.startsWith('https://') &&
+        !rawIcon.startsWith('picon://') &&
+        baseUrl.isNotEmpty) {
+      rawIcon = '${baseUrl.replaceFirst(RegExp(r'/$'), '')}/${rawIcon.replaceFirst(RegExp(r'^/'), '')}';
+    }
+
     return TvhChannel(
       uuid: '${json['uuid'] ?? ''}',
       name: '${json['name'] ?? ''}',
-      number: json['number'] is num ? (json['number'] as num).toInt() : int.tryParse('${json['number'] ?? '0'}') ?? 0,
-      icon: '${json['icon_public_url'] ?? json['icon'] ?? ''}',
+      number: parsedNumber,
+      displayNumber: rawNumber,
+      icon: rawIcon,
       tags: tags,
     );
   }
@@ -1095,7 +1127,7 @@ class ChannelListTile extends StatelessWidget {
                 width: 34,
                 child: Center(
                   child: Text(
-                    channel.number > 0 ? '${channel.number}' : '-',
+                    channel.displayNumber.isNotEmpty ? channel.displayNumber : '-',
                     style: const TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w900,
